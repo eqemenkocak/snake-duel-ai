@@ -9,7 +9,7 @@ class OyuncuYilani extends Component {
   Yon mevcutYon = Yon.sag; 
 
   double zamanSayaci = 0;
-  final double hareketAraligi = 0.2; 
+  final double hareketAraligi = 0.1; 
   
   // Yılanın ne kadar büyüyeceğini tutan değişken
   int buyumeBekleyen = 0; 
