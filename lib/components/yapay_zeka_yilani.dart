@@ -8,28 +8,58 @@ class YapayZekaYilani extends Component with HasGameRef<SnakeGame> {
   final double hucreBoyutu;
   final int yatayKare;
   final int dikeyKare;
+  final int zorlukSeviyesi; 
   
   List<Vector2> govde = [];
   Yon mevcutYon = Yon.sol;
 
   double zamanSayaci = 0;
-  final double hareketAraligi = 0.1; 
+  late double normalHareketAraligi; 
+  late double hareketAraligi; 
   int buyumeBekleyen = 0;
+
+  // YENİLİK: Nitro değişkenleri
+  bool hizliMi = false;
+  double hizSuresi = 0;
 
   YapayZekaYilani({
     required this.hucreBoyutu, 
     required this.yatayKare, 
-    required this.dikeyKare
+    required this.dikeyKare,
+    required this.zorlukSeviyesi, 
   }) {
     govde.add(Vector2(yatayKare - 5.0, dikeyKare - 5.0)); 
     govde.add(Vector2(yatayKare - 4.0, dikeyKare - 5.0)); 
     govde.add(Vector2(yatayKare - 3.0, dikeyKare - 5.0)); 
+
+    if (zorlukSeviyesi == 1) {
+      normalHareketAraligi = 0.3; 
+    } else if (zorlukSeviyesi == 2) {
+      normalHareketAraligi = 0.2; 
+    } else {
+      normalHareketAraligi = 0.1; 
+    }
+    hareketAraligi = normalHareketAraligi;
+  }
+
+  void hizKazan() {
+    hizliMi = true;
+    hizSuresi = 3.0; // 3 Saniye
+    hareketAraligi = normalHareketAraligi / 2; // AI da 2 kat hızlanır
   }
 
   @override
   void update(double dt) {
     super.update(dt);
     zamanSayaci += dt;
+
+    if (hizliMi) {
+      hizSuresi -= dt;
+      if (hizSuresi <= 0) {
+        hizliMi = false;
+        hareketAraligi = normalHareketAraligi;
+      }
+    }
 
     if (zamanSayaci >= hareketAraligi) {
       rotaHesaplaVeHareketEt(); 
@@ -42,14 +72,21 @@ class YapayZekaYilani extends Component with HasGameRef<SnakeGame> {
       if (gameRef.yem.konum == null) return; 
 
       Vector2 hedef = gameRef.yem.konum!;
-      List<Vector2> engeller = [];
 
+      // YENİLİK: AI Zekası - Eğer mavi hız yemi ona daha yakınsa, onu hedeflesin!
+      if (gameRef.hizYemi.konum != null) {
+        double mesafeKirmizi = govde.first.distanceTo(gameRef.yem.konum!);
+        double mesafeMavi = govde.first.distanceTo(gameRef.hizYemi.konum!);
+        
+        if (mesafeMavi < mesafeKirmizi) {
+          hedef = gameRef.hizYemi.konum!;
+        }
+      }
+
+      List<Vector2> engeller = [];
       engeller.addAll(gameRef.engelKonumlari); 
       engeller.addAll(gameRef.oyuncu.govde); 
-      
-      for (int i = 1; i < govde.length; i++) {
-        engeller.add(govde[i]); 
-      }
+      for (int i = 1; i < govde.length; i++) engeller.add(govde[i]); 
 
       List<Vector2> yol = AYildiz.yolBul(
         baslangic: govde.first,
@@ -100,7 +137,8 @@ class YapayZekaYilani extends Component with HasGameRef<SnakeGame> {
 
   @override
   void render(Canvas canvas) {
-    final firca = Paint()..color = Colors.blue;
+    // YENİLİK: AI hızlanınca rengi parlasın (Cyan)
+    final firca = Paint()..color = hizliMi ? Colors.cyanAccent : Colors.blue;
 
     for (var parca in govde) {
       final dikdortgen = Rect.fromLTWH(

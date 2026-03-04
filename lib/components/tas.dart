@@ -13,7 +13,7 @@ class Tas extends Component {
   @override
   void render(Canvas canvas) {
     // Taşın rengi: Koyu gri, sert bir görünüm için
-    final tasFircasi = Paint()..color = Colors.grey[700]!; 
+    final tasFircasi = Paint()..color = Colors.grey[700]!;
 
     final dikdortgen = Rect.fromLTWH(
       konum.x * hucreBoyutu,
