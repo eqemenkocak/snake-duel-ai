@@ -22,7 +22,7 @@ class AltinPara extends Component with HasGameRef<SnakeGame> {
     if (yatayKareSayisi <= 2 || dikeyKareSayisi <= 2) { konum = Vector2(3, 3); return; }
     
     bool konumGuvenliMi = false;
-    int deneme = 0; // GÜVENLİK SİGORTASI
+    int deneme = 0; 
     
     while (!konumGuvenliMi && deneme < 100) {
       deneme++;
@@ -33,8 +33,9 @@ class AltinPara extends Component with HasGameRef<SnakeGame> {
       bool uzerindeEngelVarMi = false;
       try {
         bool tasVarMi = gameRef.engelKonumlari.any((tas) => tas.x == yeniKonum.x && tas.y == yeniKonum.y);
+        // YENİLİK: Ordu Kontrolü eklendi!
         bool yilanVarMi = gameRef.oyuncu.govde.any((p) => p.x == yeniKonum.x && p.y == yeniKonum.y) || 
-                          gameRef.yapayZeka.govde.any((p) => p.x == yeniKonum.x && p.y == yeniKonum.y);
+                          gameRef.yapayZekalar.any((ai) => ai.govde.any((p) => p.x == yeniKonum.x && p.y == yeniKonum.y));
         bool kirmiziYemVarMi = gameRef.yem.konum != null && gameRef.yem.konum!.x == yeniKonum.x && gameRef.yem.konum!.y == yeniKonum.y;
         bool maviYemVarMi = gameRef.hizYemi.konum != null && gameRef.hizYemi.konum!.x == yeniKonum.x && gameRef.hizYemi.konum!.y == yeniKonum.y;
         uzerindeEngelVarMi = tasVarMi || yilanVarMi || kirmiziYemVarMi || maviYemVarMi;

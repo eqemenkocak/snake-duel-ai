@@ -19,11 +19,10 @@ class Yem extends Component with HasGameRef<SnakeGame> {
   }
 
   void konumUret() {
-    // Ekran sıfırsa çökmemesi için güvenlik
     if (yatayKareSayisi <= 2 || dikeyKareSayisi <= 2) { konum = Vector2(1, 1); return; }
 
     bool konumGuvenliMi = false;
-    int deneme = 0; // GÜVENLİK SİGORTASI
+    int deneme = 0; 
     
     while (!konumGuvenliMi && deneme < 100) {
       deneme++;
@@ -34,8 +33,9 @@ class Yem extends Component with HasGameRef<SnakeGame> {
       bool uzerindeEngelVarMi = false;
       try {
         bool tasVarMi = gameRef.engelKonumlari.any((tas) => tas.x == yeniKonum.x && tas.y == yeniKonum.y);
+        // YENİLİK: Artık 1 yapay zekaya değil, BÜTÜN orduya (yapayZekalar) bakıyoruz!
         bool yilanVarMi = gameRef.oyuncu.govde.any((p) => p.x == yeniKonum.x && p.y == yeniKonum.y) || 
-                          gameRef.yapayZeka.govde.any((p) => p.x == yeniKonum.x && p.y == yeniKonum.y);
+                          gameRef.yapayZekalar.any((ai) => ai.govde.any((p) => p.x == yeniKonum.x && p.y == yeniKonum.y));
         uzerindeEngelVarMi = tasVarMi || yilanVarMi;
       } catch (e) { uzerindeEngelVarMi = false; }
 
@@ -46,7 +46,6 @@ class Yem extends Component with HasGameRef<SnakeGame> {
         konumGuvenliMi = true;
       }
     }
-    // Eğer 100 denemede bulamadıysa sonsuz döngüye girme, zorla bir yere koy
     if (!konumGuvenliMi) konum = Vector2(1, 1);
   }
 

@@ -1,153 +1,127 @@
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
+import 'dart:math';
+import '../main.dart';
 import 'snake.dart';
-import '../pathfinding/a_yildiz.dart'; 
-import '../main.dart'; 
 
 class YapayZekaYilani extends Component with HasGameRef<SnakeGame> {
-  final double hucreBoyutu;
-  final int yatayKare;
-  final int dikeyKare;
-  final int zorlukSeviyesi; 
-  
-  List<Vector2> govde = [];
-  Yon mevcutYon = Yon.sol;
+final double hucreBoyutu;
+final int yatayKare;
+final int dikeyKare;
+final int zorlukSeviyesi;
+List<Vector2> govde = [Vector2(5, 5)];
+Yon mevcutYon = Yon.asagi;
+double hareketZamani = 0;
+double hizCarpani = 1.0;
+late Color yilanRengi;
+bool oluMu = false; // YENİLİK: Zombi virüsünü engelleyen hayat kurtarıcı şalter!
 
-  double zamanSayaci = 0;
-  late double normalHareketAraligi; 
-  late double hareketAraligi; 
-  int buyumeBekleyen = 0;
+YapayZekaYilani({required this.hucreBoyutu, required this.yatayKare, required this.dikeyKare, required this.zorlukSeviyesi});
 
-  // YENİLİK: Nitro değişkenleri
-  bool hizliMi = false;
-  double hizSuresi = 0;
+@override
+Future<void> onLoad() async {
+super.onLoad();
+List<Color> renkler = [Colors.redAccent, Colors.orangeAccent, Colors.purpleAccent, Colors.deepOrange, Colors.pinkAccent, Colors.blueAccent];
+yilanRengi = renkler[Random().nextInt(renkler.length)];
+}
 
-  YapayZekaYilani({
-    required this.hucreBoyutu, 
-    required this.yatayKare, 
-    required this.dikeyKare,
-    required this.zorlukSeviyesi, 
-  }) {
-    govde.add(Vector2(yatayKare - 5.0, dikeyKare - 5.0)); 
-    govde.add(Vector2(yatayKare - 4.0, dikeyKare - 5.0)); 
-    govde.add(Vector2(yatayKare - 3.0, dikeyKare - 5.0)); 
+@override
+void update(double dt) {
+if (oluMu) return; // Yılan öldüyse beynini anında durdur!
+super.update(dt);
+double normalHiz = 0.3;
+if (zorlukSeviyesi == 1) normalHiz = 0.4;
+if (zorlukSeviyesi == 2) normalHiz = 0.18;
+if (zorlukSeviyesi == 3) normalHiz = 0.15;
+hareketZamani += dt;
+if (hareketZamani > normalHiz * hizCarpani) {
+hareketZamani = 0;
+hedefeYonelVeHayattaKal();
+ilerle();
+}
+}
 
-    if (zorlukSeviyesi == 1) {
-      normalHareketAraligi = 0.3; 
-    } else if (zorlukSeviyesi == 2) {
-      normalHareketAraligi = 0.2; 
-    } else {
-      normalHareketAraligi = 0.1; 
-    }
-    hareketAraligi = normalHareketAraligi;
-  }
+void hedefeYonelVeHayattaKal() {
+List<Vector2> hedefler = [];
+if (gameRef.yem.konum != null) hedefler.add(gameRef.yem.konum!);
+if (gameRef.hizYemi.konum != null) hedefler.add(gameRef.hizYemi.konum!);
+if (hedefler.isEmpty) return;
+Vector2 kafa = govde.first;
+Vector2 hedef = hedefler.first;
+double minMesafeHedef = double.infinity;
+for (var h in hedefler) {
+double m = (h.x - kafa.x).abs() + (h.y - kafa.y).abs();
+if (m < minMesafeHedef) { minMesafeHedef = m; hedef = h; }
+}
+List<Yon> tumYonler = [Yon.yukari, Yon.asagi, Yon.sol, Yon.sag];
+tumYonler.removeWhere((y) => (y == Yon.yukari && mevcutYon == Yon.asagi) || (y == Yon.asagi && mevcutYon == Yon.yukari) || (y == Yon.sol && mevcutYon == Yon.sag) || (y == Yon.sag && mevcutYon == Yon.sol));
+List<Yon> guvenliYonler = [];
+for (var y in tumYonler) { if (yonGuvenliMi(y)) guvenliYonler.add(y); }
+if (guvenliYonler.isEmpty) return;
+guvenliYonler.sort((a, b) {
+double mesafeA = mesafeHesapla(kafa, hedef, a);
+double mesafeB = mesafeHesapla(kafa, hedef, b);
+int kiyas = mesafeA.compareTo(mesafeB);
+if (kiyas == 0) {
+if (a == mevcutYon) return -1;
+if (b == mevcutYon) return 1;
+}
+return kiyas;
+});
+mevcutYon = guvenliYonler.first;
+}
 
-  void hizKazan() {
-    hizliMi = true;
-    hizSuresi = 3.0; // 3 Saniye
-    hareketAraligi = normalHareketAraligi / 2; // AI da 2 kat hızlanır
-  }
+double mesafeHesapla(Vector2 baslangic, Vector2 hedef, Yon? yon) {
+double x = baslangic.x;
+double y = baslangic.y;
+if (yon == Yon.yukari) y -= 1;
+else if (yon == Yon.asagi) y += 1;
+else if (yon == Yon.sol) x -= 1;
+else if (yon == Yon.sag) x += 1;
+return (hedef.x - x).abs() + (hedef.y - y).abs();
+}
 
-  @override
-  void update(double dt) {
-    super.update(dt);
-    zamanSayaci += dt;
+bool yonGuvenliMi(Yon yon) {
+Vector2 kafa = govde.first;
+Vector2 adim = Vector2(kafa.x, kafa.y);
+if (yon == Yon.yukari) adim.y -= 1;
+else if (yon == Yon.asagi) adim.y += 1;
+else if (yon == Yon.sol) adim.x -= 1;
+else if (yon == Yon.sag) adim.x += 1;
+if (adim.x < 0 || adim.x >= yatayKare || adim.y < 0 || adim.y >= dikeyKare) return false;
+try {
+if (gameRef.engelKonumlari.any((t) => t.x == adim.x && t.y == adim.y)) return false;
+for (int i = 0; i < govde.length - 1; i++) { if (govde[i].x == adim.x && govde[i].y == adim.y) return false; }
+if (gameRef.oyuncu.govde.any((p) => p.x == adim.x && p.y == adim.y)) return false;
+for (var ai in gameRef.yapayZekalar) {
+if (ai != this && !ai.oluMu && ai.govde.any((p) => p.x == adim.x && p.y == adim.y)) return false;
+}
+} catch (e) { return false; }
+return true;
+}
 
-    if (hizliMi) {
-      hizSuresi -= dt;
-      if (hizSuresi <= 0) {
-        hizliMi = false;
-        hareketAraligi = normalHareketAraligi;
-      }
-    }
+void ilerle() {
+Vector2 kafa = govde.first;
+Vector2 yeni = Vector2(kafa.x, kafa.y);
+if (mevcutYon == Yon.yukari) yeni.y -= 1;
+else if (mevcutYon == Yon.asagi) yeni.y += 1;
+else if (mevcutYon == Yon.sol) yeni.x -= 1;
+else if (mevcutYon == Yon.sag) yeni.x += 1;
+govde.insert(0, yeni);
+govde.removeLast();
+}
 
-    if (zamanSayaci >= hareketAraligi) {
-      rotaHesaplaVeHareketEt(); 
-      zamanSayaci = 0;
-    }
-  }
+void yemYedi() { govde.add(Vector2(govde.last.x, govde.last.y)); }
+void hizKazan() { hizCarpani = 0.5; Future.delayed(const Duration(seconds: 3), () { hizCarpani = 1.0; }); }
 
-  void rotaHesaplaVeHareketEt() {
-    try {
-      if (gameRef.yem.konum == null) return; 
-
-      Vector2 hedef = gameRef.yem.konum!;
-
-      // YENİLİK: AI Zekası - Eğer mavi hız yemi ona daha yakınsa, onu hedeflesin!
-      if (gameRef.hizYemi.konum != null) {
-        double mesafeKirmizi = govde.first.distanceTo(gameRef.yem.konum!);
-        double mesafeMavi = govde.first.distanceTo(gameRef.hizYemi.konum!);
-        
-        if (mesafeMavi < mesafeKirmizi) {
-          hedef = gameRef.hizYemi.konum!;
-        }
-      }
-
-      List<Vector2> engeller = [];
-      engeller.addAll(gameRef.engelKonumlari); 
-      engeller.addAll(gameRef.oyuncu.govde); 
-      for (int i = 1; i < govde.length; i++) engeller.add(govde[i]); 
-
-      List<Vector2> yol = AYildiz.yolBul(
-        baslangic: govde.first,
-        hedef: hedef,
-        yatayKareSayisi: yatayKare,
-        dikeyKareSayisi: dikeyKare,
-        engeller: engeller, 
-      );
-
-      if (yol.length > 1) {
-        Vector2 sonrakiKare = yol[1]; 
-        Vector2 mevcutKafa = govde.first;
-
-        if (sonrakiKare.x > mevcutKafa.x) mevcutYon = Yon.sag;
-        else if (sonrakiKare.x < mevcutKafa.x) mevcutYon = Yon.sol;
-        else if (sonrakiKare.y > mevcutKafa.y) mevcutYon = Yon.asagi;
-        else if (sonrakiKare.y < mevcutKafa.y) mevcutYon = Yon.yukari;
-      }
-
-      hareketUygula();
-    } catch (e) {
-      return;
-    }
-  }
-
-  void hareketUygula() {
-    Vector2 yeniKafa = govde.first.clone();
-
-    switch (mevcutYon) {
-      case Yon.yukari: yeniKafa.y -= 1; break;
-      case Yon.asagi: yeniKafa.y += 1; break;
-      case Yon.sol: yeniKafa.x -= 1; break;
-      case Yon.sag: yeniKafa.x += 1; break;
-    }
-
-    govde.insert(0, yeniKafa);
-
-    if (buyumeBekleyen > 0) {
-      buyumeBekleyen--;
-    } else {
-      govde.removeLast();
-    }
-  }
-
-  void yemYedi() {
-    buyumeBekleyen++;
-  }
-
-  @override
-  void render(Canvas canvas) {
-    // YENİLİK: AI hızlanınca rengi parlasın (Cyan)
-    final firca = Paint()..color = hizliMi ? Colors.cyanAccent : Colors.blue;
-
-    for (var parca in govde) {
-      final dikdortgen = Rect.fromLTWH(
-        parca.x * hucreBoyutu,
-        parca.y * hucreBoyutu,
-        hucreBoyutu,
-        hucreBoyutu,
-      );
-      canvas.drawRect(dikdortgen.deflate(1.0), firca);
-    }
-  }
+@override
+void render(Canvas canvas) {
+if (oluMu) return; // Yılan öldüyse çizimi (hayaleti) ekrandan sil!
+final firca = Paint()..color = yilanRengi;
+for (int i = 0; i < govde.length; i++) {
+final p = govde[i];
+final rect = Rect.fromLTWH(p.x * hucreBoyutu, p.y * hucreBoyutu, hucreBoyutu, hucreBoyutu);
+canvas.drawRect(rect, firca);
+}
+}
 }
