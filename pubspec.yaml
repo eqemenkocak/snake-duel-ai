@@ -35,17 +35,13 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1  # YENİ: Paketi buraya da tanıtıyoruz
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -88,3 +84,12 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+# pubspec.yaml dosyasının en altı
+
+# İkon oluşturma paketi için konfigürasyon
+flutter_launcher_icons:
+  android: "launcher_icon" # Eski ikonu değiştiriyoruz
+  ios: true # iOS için de ikon oluştur
+  image_path: "assets/images/ic_launcher.png" # Kaynak görselimiz
+  adaptive_icon_background: "#000000" # S24 Ultra için siyah arka plan (Kayseri gece karanlığı)
+  adaptive_icon_foreground: "assets/images/ic_launcher.png" # Ön plan görselimiz (neon yılanlar)
