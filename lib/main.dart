@@ -7,6 +7,7 @@ import 'package:flame/components.dart';
 import 'dart:ui';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flame_audio/flame_audio.dart'; 
 
 import 'components/yapay_zeka_yilani.dart';
 import 'components/snake.dart';
@@ -16,12 +17,11 @@ import 'components/hiz_yemi.dart';
 import 'components/altin_para.dart'; 
 
 // --- GLOBAL OYUNCU VERİLERİ ---
-int toplamAltin = 5000; // HİLE AKTİF! İstediğin zaman 0 yapıp alttaki satırı açarsın
+int toplamAltin = 5000; 
 List<String> sahipOlunanSkinler = ["Klasik Yeşil"]; 
 String aktifSkin = "Klasik Yeşil"; 
 double kaydirmaHassasiyeti = 5.0; 
 
-// YENİLİK: Artık bir liste tutuyoruz!
 List<String> sahipOlunanAksesuarlar = []; 
 List<String> aktifAksesuarlar = []; 
 
@@ -32,11 +32,17 @@ double gRakipSayisi = 1.0;
 int klasikRekor = 0; 
 int gSecilenMod = 0; 
 
+// --- GÜNLÜK GÖREV SİSTEMİ DEĞİŞKENLERİ ---
+String gSonGorevTarihi = "";
+bool gGorevTamamlandi = false;
+int gHedefHareketli = 5;
+int gHedefAltin = 5;
+int gHedefHiz = 3;
+
 late SharedPreferences prefs; 
 
 void veriYukle() {
   toplamAltin = 5000; 
-  // toplamAltin = prefs.getInt('toplamAltin') ?? 0; 
   sahipOlunanSkinler = prefs.getStringList('sahipOlunanSkinler') ?? ["Klasik Yeşil"];
   aktifSkin = prefs.getString('aktifSkin') ?? "Klasik Yeşil";
   sahipOlunanAksesuarlar = prefs.getStringList('sahipOlunanAksesuarlar') ?? [];
@@ -49,6 +55,28 @@ void veriYukle() {
   gRakipSayisi = prefs.getDouble('gRakipSayisi') ?? 1.0;
   klasikRekor = prefs.getInt('klasikRekor') ?? 0; 
   gSecilenMod = prefs.getInt('gSecilenMod') ?? 0; 
+
+  String bugun = DateTime.now().toIso8601String().substring(0, 10);
+  gSonGorevTarihi = prefs.getString('gSonGorevTarihi') ?? "";
+  gGorevTamamlandi = prefs.getBool('gGorevTamamlandi') ?? false;
+
+  if (gSonGorevTarihi != bugun) {
+    gSonGorevTarihi = bugun;
+    gGorevTamamlandi = false;
+    gHedefHareketli = Random().nextInt(5) + 3; 
+    gHedefAltin = Random().nextInt(4) + 3;     
+    gHedefHiz = Random().nextInt(3) + 2;       
+    
+    prefs.setString('gSonGorevTarihi', gSonGorevTarihi);
+    prefs.setBool('gGorevTamamlandi', gGorevTamamlandi);
+    prefs.setInt('gHedefHareketli', gHedefHareketli);
+    prefs.setInt('gHedefAltin', gHedefAltin);
+    prefs.setInt('gHedefHiz', gHedefHiz);
+  } else {
+    gHedefHareketli = prefs.getInt('gHedefHareketli') ?? 5;
+    gHedefAltin = prefs.getInt('gHedefAltin') ?? 5;
+    gHedefHiz = prefs.getInt('gHedefHiz') ?? 3;
+  }
 }
 
 Future<void> veriKaydet() async {
@@ -56,7 +84,7 @@ Future<void> veriKaydet() async {
   await prefs.setStringList('sahipOlunanSkinler', sahipOlunanSkinler);
   await prefs.setString('aktifSkin', aktifSkin);
   await prefs.setStringList('sahipOlunanAksesuarlar', sahipOlunanAksesuarlar);
-  await prefs.setStringList('aktifAksesuarlar', aktifAksesuarlar); // Liste olarak kaydet
+  await prefs.setStringList('aktifAksesuarlar', aktifAksesuarlar); 
   await prefs.setDouble('kaydirmaHassasiyeti', kaydirmaHassasiyeti);
 
   await prefs.setString('gOyuncuAdi', gOyuncuAdi);
@@ -65,6 +93,9 @@ Future<void> veriKaydet() async {
   await prefs.setDouble('gRakipSayisi', gRakipSayisi);
   await prefs.setInt('klasikRekor', klasikRekor); 
   await prefs.setInt('gSecilenMod', gSecilenMod); 
+
+  await prefs.setString('gSonGorevTarihi', gSonGorevTarihi);
+  await prefs.setBool('gGorevTamamlandi', gGorevTamamlandi);
 }
 
 void main() async {
@@ -120,8 +151,8 @@ class _AnaMenuState extends State<AnaMenu> {
             aspectRatio: 1.0, 
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: secilenMod == 2 ? Colors.redAccent : Colors.blueAccent, width: 4),
-                boxShadow: [BoxShadow(color: (secilenMod == 2 ? Colors.redAccent : Colors.blueAccent).withOpacity(0.4), blurRadius: 30)],
+                border: Border.all(color: secilenMod == 2 ? Colors.redAccent : (secilenMod == 3 ? Colors.orangeAccent : Colors.blueAccent), width: 4),
+                boxShadow: [BoxShadow(color: (secilenMod == 2 ? Colors.redAccent : (secilenMod == 3 ? Colors.orangeAccent : Colors.blueAccent)).withOpacity(0.4), blurRadius: 30)],
                 color: Colors.black,
               ),
               child: ClipRRect(child: oyunEkrani),
@@ -163,24 +194,30 @@ class _AnaMenuState extends State<AnaMenu> {
                   child: ValueListenableBuilder<int>(
                     valueListenable: aktifOyun!.skorNotifier,
                     builder: (context, skor, child) {
+                      String ustYazi = "OYUNCU 1";
+                      if (secilenMod != 2) {
+                        ustYazi = aktifOyun!.oyuncuAdi.isNotEmpty ? aktifOyun!.oyuncuAdi.toUpperCase() : "SENİN SKORUN";
+                      }
+                      
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("OYUNCU 1", style: TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                          Text(ustYazi, style: TextStyle(color: Colors.greenAccent, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
                           Text("$skor", style: TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)),
                         ],
                       );
                     },
                   ),
                 ),
+                
                 Positioned(
                   top: 30, right: 40,
-                  child: secilenMod == 1 
+                  child: (secilenMod == 1 || secilenMod == 3) 
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text("REKOR", style: TextStyle(color: Colors.amber.withOpacity(0.8), fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                        Text("$klasikRekor", style: TextStyle(color: Colors.amber, fontSize: 40, fontWeight: FontWeight.bold)),
+                        Text(secilenMod == 3 ? "ÖDÜL" : "REKOR", style: TextStyle(color: Colors.amber.withOpacity(0.8), fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                        Text(secilenMod == 3 ? "30G" : "$klasikRekor", style: TextStyle(color: Colors.amber, fontSize: 40, fontWeight: FontWeight.bold)),
                       ],
                     )
                   : ValueListenableBuilder<int>(
@@ -196,6 +233,41 @@ class _AnaMenuState extends State<AnaMenu> {
                       },
                     ),
                 ),
+
+                if (secilenMod == 3 || secilenMod == 0)
+                  Positioned(
+                    bottom: 30, left: 40,
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: aktifOyun!.uiTetikleyici,
+                      builder: (context, val, child) {
+                        if (secilenMod == 3) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("🎯 HEDEFLER", style: TextStyle(color: Colors.orangeAccent, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                              SizedBox(height: 8),
+                              Text("🍎 Kırmızı Yem: ${aktifOyun!.toplananHareketli} / $gHedefHareketli", style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                              SizedBox(height: 4),
+                              Text("⚡ Hız Yemi: ${aktifOyun!.toplananHiz} / $gHedefHiz", style: TextStyle(color: Colors.cyanAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                              SizedBox(height: 4),
+                              Text("💰 Altın Para: ${aktifOyun!.toplananAltin} / $gHedefAltin", style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
+                            ]
+                          );
+                        } else {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("⚔️ SAVAŞ DURUMU", style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                              SizedBox(height: 8),
+                              Text("Kalan Rakip: ${aktifOyun!.yapayZekalar.length}", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                              SizedBox(height: 4),
+                              Text("Lider AI Skoru: ${aktifOyun!.aiSkoru} / ${gHedefYem.toInt() * 10}", style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                            ]
+                          );
+                        }
+                      }
+                    )
+                  )
               ]
             ],
           ),
@@ -209,7 +281,7 @@ class _AnaMenuState extends State<AnaMenu> {
         fit: StackFit.expand,
         children: [
           GameWidget(
-            game: SnakeGame(oyuncuAdi: "", zorlukSeviyesi: 2, hedefYem: 10, rakipSayisi: 1, klasikModMu: false, ikiKisilikMi: false, seciliAksesuarlar: []), 
+            game: SnakeGame(oyuncuAdi: "", zorlukSeviyesi: 2, hedefYem: 10, rakipSayisi: 1, klasikModMu: false, ikiKisilikMi: false, gunlukModMu: false, seciliAksesuarlar: []), 
             overlayBuilderMap: {
               'GameOver': (context, SnakeGame game) => const SizedBox.shrink()
             }
@@ -222,13 +294,13 @@ class _AnaMenuState extends State<AnaMenu> {
             child: SingleChildScrollView(
               child: Container(
                 padding: EdgeInsets.symmetric(vertical: 12, horizontal: 15), 
-                width: MediaQuery.of(context).size.width * 0.68, 
-                constraints: BoxConstraints(maxWidth: 420), 
+                width: MediaQuery.of(context).size.width * 0.72, 
+                constraints: BoxConstraints(maxWidth: 480), 
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.7), 
                   borderRadius: BorderRadius.circular(15), 
-                  border: Border.all(color: secilenMod == 0 ? Colors.green : (secilenMod == 1 ? Colors.blueAccent : Colors.redAccent), width: 2), 
-                  boxShadow: [BoxShadow(color: (secilenMod == 0 ? Colors.green : (secilenMod == 1 ? Colors.blueAccent : Colors.redAccent)).withOpacity(0.3), blurRadius: 15)]
+                  border: Border.all(color: secilenMod == 0 ? Colors.green : (secilenMod == 1 ? Colors.blueAccent : (secilenMod == 3 ? Colors.orangeAccent : Colors.redAccent)), width: 2), 
+                  boxShadow: [BoxShadow(color: (secilenMod == 0 ? Colors.green : (secilenMod == 1 ? Colors.blueAccent : (secilenMod == 3 ? Colors.orangeAccent : Colors.redAccent))).withOpacity(0.3), blurRadius: 15)]
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -236,33 +308,36 @@ class _AnaMenuState extends State<AnaMenu> {
                     Text("SNAKE DUEL AI", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1.5)), 
                     SizedBox(height: 10),
                     
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ChoiceChip(
-                          label: Text("Battle Royale", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: secilenMod == 0 ? Colors.black : Colors.white)),
-                          selected: secilenMod == 0,
-                          selectedColor: Colors.greenAccent,
-                          backgroundColor: Colors.grey[800],
-                          onSelected: (val) { setState(() { secilenMod = 0; gSecilenMod = 0; }); veriKaydet(); },
-                        ),
-                        SizedBox(width: 5),
-                        ChoiceChip(
-                          label: Text("Solo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: secilenMod == 1 ? Colors.black : Colors.white)),
-                          selected: secilenMod == 1,
-                          selectedColor: Colors.blueAccent,
-                          backgroundColor: Colors.grey[800],
-                          onSelected: (val) { setState(() { secilenMod = 1; gSecilenMod = 1; }); veriKaydet(); },
-                        ),
-                        SizedBox(width: 5),
-                        ChoiceChip(
-                          label: Text("1v1 Düello", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: secilenMod == 2 ? Colors.black : Colors.white)),
-                          selected: secilenMod == 2,
-                          selectedColor: Colors.redAccent,
-                          backgroundColor: Colors.grey[800],
-                          onSelected: (val) { setState(() { secilenMod = 2; gSecilenMod = 2; }); veriKaydet(); },
-                        ),
-                      ],
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ChoiceChip(
+                            label: Text("Battle Royale", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: secilenMod == 0 ? Colors.black : Colors.white)),
+                            selected: secilenMod == 0, selectedColor: Colors.greenAccent, backgroundColor: Colors.grey[800],
+                            onSelected: (val) { setState(() { secilenMod = 0; gSecilenMod = 0; }); veriKaydet(); },
+                          ),
+                          SizedBox(width: 5),
+                          ChoiceChip(
+                            label: Text("Solo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: secilenMod == 1 ? Colors.black : Colors.white)),
+                            selected: secilenMod == 1, selectedColor: Colors.blueAccent, backgroundColor: Colors.grey[800],
+                            onSelected: (val) { setState(() { secilenMod = 1; gSecilenMod = 1; }); veriKaydet(); },
+                          ),
+                          SizedBox(width: 5),
+                          ChoiceChip(
+                            label: Text("1v1 Düello", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: secilenMod == 2 ? Colors.black : Colors.white)),
+                            selected: secilenMod == 2, selectedColor: Colors.redAccent, backgroundColor: Colors.grey[800],
+                            onSelected: (val) { setState(() { secilenMod = 2; gSecilenMod = 2; }); veriKaydet(); },
+                          ),
+                          SizedBox(width: 5),
+                          ChoiceChip(
+                            label: Text("Günlük Görev", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: secilenMod == 3 ? Colors.black : Colors.white)),
+                            selected: secilenMod == 3, selectedColor: Colors.orangeAccent, backgroundColor: Colors.grey[800],
+                            onSelected: (val) { setState(() { secilenMod = 3; gSecilenMod = 3; }); veriKaydet(); },
+                          ),
+                        ],
+                      ),
                     ),
                     SizedBox(height: 10),
 
@@ -286,7 +361,7 @@ class _AnaMenuState extends State<AnaMenu> {
                     ), 
                     SizedBox(height: 10),
                     
-                    if (secilenMod == 0) ...[
+                    if (secilenMod != 2) ...[
                       SizedBox(
                         height: 35, 
                         child: TextField(
@@ -305,6 +380,9 @@ class _AnaMenuState extends State<AnaMenu> {
                         ),
                       ), 
                       SizedBox(height: 8),
+                    ],
+
+                    if (secilenMod == 0) ...[
                       Text("Rakip Yılan Sayısı: ${gRakipSayisi.toInt()}", style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                       SizedBox(height: 24, child: Slider(value: gRakipSayisi, min: 1.0, max: 5.0, divisions: 4, activeColor: Colors.red, inactiveColor: Colors.white24, onChanged: (deger) { setState(() => gRakipSayisi = deger); veriKaydet(); })),
                       Text("Oyun Sonu Hedefi: ${gHedefYem.toInt()} Yem", style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -312,25 +390,36 @@ class _AnaMenuState extends State<AnaMenu> {
                       Text("AI Zorluk: ${zorlukMetniAl(gSecilenZorluk)}", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                       SizedBox(height: 24, child: Slider(value: gSecilenZorluk, min: 1.0, max: 3.0, divisions: 2, activeColor: Colors.green, inactiveColor: Colors.white24, onChanged: (deger) { setState(() => gSecilenZorluk = deger); veriKaydet(); })),
                     ] else if (secilenMod == 1) ...[
-                      SizedBox(height: 10),
+                      SizedBox(height: 5),
                       Text("🐍 SOLO REKORUN: $klasikRekor 🐍", style: TextStyle(color: Colors.amber, fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text("Her yemde %7 daha hızlanırsın!", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text("Her yemde %2 daha hızlanırsın!", style: TextStyle(color: Colors.white70, fontSize: 12)),
                       SizedBox(height: 20),
                     ] else if (secilenMod == 2) ...[
                       SizedBox(height: 10),
                       Text("⚔️ 1 VS 1 DÜELLO ⚔️", style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold)),
                       Text("Sol ekran: Oyuncu 1 | Sağ Ekran: Oyuncu 2", style: TextStyle(color: Colors.white70, fontSize: 12)),
                       SizedBox(height: 20),
+                    ] else if (secilenMod == 3) ...[
+                      SizedBox(height: 5),
+                      Text("🎯 GÜNLÜK GÖREV 🎯", style: TextStyle(color: Colors.orangeAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 5),
+                      if (gGorevTamamlandi)
+                        Text("Bugünün görevini tamamladın!\nYeni görev için yarına bekle.", textAlign: TextAlign.center, style: TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.bold))
+                      else ...[
+                        Text("Hedef: $gHedefHareketli Hareketli Yem, $gHedefAltin Altın, $gHedefHiz Hız Yemi", style: TextStyle(color: Colors.white, fontSize: 12)),
+                        Text("Ödül: 30 Altın!", style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
+                      ],
+                      SizedBox(height: 20),
                     ],
                     
                     SizedBox(height: 6),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: secilenMod == 0 ? Colors.green : (secilenMod == 1 ? Colors.blueAccent : Colors.redAccent), 
+                        backgroundColor: secilenMod == 0 ? Colors.green : (secilenMod == 1 ? Colors.blueAccent : (secilenMod == 3 ? Colors.orangeAccent : Colors.redAccent)), 
                         padding: EdgeInsets.symmetric(horizontal: 40, vertical: 10), 
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
                       ), 
-                      onPressed: () { 
+                      onPressed: (secilenMod == 3 && gGorevTamamlandi) ? null : () { 
                         setState(() { 
                           if (isimKontrolcusu.text.isNotEmpty) gOyuncuAdi = isimKontrolcusu.text; 
                           veriKaydet(); 
@@ -338,15 +427,16 @@ class _AnaMenuState extends State<AnaMenu> {
                             oyuncuAdi: gOyuncuAdi, 
                             zorlukSeviyesi: gSecilenZorluk.toInt(), 
                             hedefYem: secilenMod > 0 ? 9999 : gHedefYem.toInt(), 
-                            rakipSayisi: secilenMod > 0 ? 0 : gRakipSayisi.toInt(),
-                            klasikModMu: secilenMod > 0,
+                            rakipSayisi: secilenMod == 0 ? gRakipSayisi.toInt() : 0,
+                            klasikModMu: secilenMod == 1,
                             ikiKisilikMi: secilenMod == 2,
-                            seciliAksesuarlar: aktifAksesuarlar // YENİLİK: Listeyi gönder
+                            gunlukModMu: secilenMod == 3,
+                            seciliAksesuarlar: aktifAksesuarlar 
                           ); 
                           oyunBasladi = true; 
                         }); 
                       }, 
-                      child: Text("SAVAŞI BAŞLAT", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))
+                      child: Text((secilenMod == 3 && gGorevTamamlandi) ? "GÖREV TAMAMLANDI" : "SAVAŞI BAŞLAT", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))
                     )
                   ],
                 ),
@@ -410,7 +500,7 @@ class _MagazaEkraniState extends State<MagazaEkrani> with SingleTickerProviderSt
   ];
 
   final List<Map<String, dynamic>> aksesuarVitrin = [
-    {"isim": "Hepsini Çıkar", "fiyat": 0, "ikon": "❌"}, // YENİLİK
+    {"isim": "Hepsini Çıkar", "fiyat": 0, "ikon": "❌"},
     {"isim": "Koca Burun", "fiyat": 100, "ikon": "👃"},
     {"isim": "Komik Ağız", "fiyat": 100, "ikon": "👄"},
     {"isim": "Siyah Gözlük", "fiyat": 150, "ikon": "🕶️"},
@@ -437,7 +527,6 @@ class _MagazaEkraniState extends State<MagazaEkrani> with SingleTickerProviderSt
     }
   }
 
-  // YENİLİK: Çoklu Aksesuar Mantığı
   void aksesuarIslemi(String isim, int fiyat) {
     if (isim == "Hepsini Çıkar") {
       setState(() { aktifAksesuarlar.clear(); });
@@ -449,10 +538,10 @@ class _MagazaEkraniState extends State<MagazaEkrani> with SingleTickerProviderSt
     if (sahipOlunanAksesuarlar.contains(isim)) { 
       setState(() { 
         if (aktifAksesuarlar.contains(isim)) {
-          aktifAksesuarlar.remove(isim); // Giyiliyse çıkar
+          aktifAksesuarlar.remove(isim); 
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$isim çıkarıldı!"), backgroundColor: Colors.redAccent)); 
         } else {
-          aktifAksesuarlar.add(isim); // Değilse tak
+          aktifAksesuarlar.add(isim); 
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$isim takıldı!"), backgroundColor: Colors.green)); 
         }
       }); 
@@ -462,7 +551,7 @@ class _MagazaEkraniState extends State<MagazaEkrani> with SingleTickerProviderSt
         setState(() { 
           toplamAltin -= fiyat; 
           sahipOlunanAksesuarlar.add(isim); 
-          aktifAksesuarlar.add(isim); // Satın alınca direkt taksın
+          aktifAksesuarlar.add(isim); 
         }); 
         veriKaydet(); 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$isim satın alındı ve takıldı!"), backgroundColor: Colors.amber)); 
@@ -554,7 +643,10 @@ class GameOverMenu extends StatelessWidget {
               Text(bitisSebebi, textAlign: TextAlign.center, style: TextStyle(color: Colors.orangeAccent, fontSize: 16, fontWeight: FontWeight.bold)), 
               SizedBox(height: 10),
               
-              if (!game.klasikModMu) ...[
+              if (game.gunlukModMu) ...[
+                Text("GÖREV DURUMU:", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                Text(gGorevTamamlandi ? "BAŞARILI!" : "BAŞARISIZ OLDU", textAlign: TextAlign.center, style: TextStyle(color: gGorevTamamlandi ? Colors.green : Colors.redAccent, fontSize: 24, fontWeight: FontWeight.bold)), 
+              ] else if (!game.klasikModMu) ...[
                 Text("KAZANAN:", style: TextStyle(color: Colors.white70, fontSize: 14)),
                 Text(game.kazanan.toUpperCase(), textAlign: TextAlign.center, style: TextStyle(color: temaRengi, fontSize: 24, fontWeight: FontWeight.bold)), 
               ] else if (game.ikiKisilikMi) ...[
@@ -570,8 +662,9 @@ class GameOverMenu extends StatelessWidget {
                 padding: EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), 
                 child: Column(
                   children: [
-                    if (senKazandin && !game.klasikModMu) Text("+${game.hedefYem} Altın (Görev Ödülü)", style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold)), 
-                    if (game.klasikModMu && !game.ikiKisilikMi) Text("+${(game.oyuncuSkoru ~/ 20)} Altın (Performans Ödülü)", style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold)), 
+                    if (game.gunlukModMu && gGorevTamamlandi) Text("+30 Altın (Günlük Görev Ödülü!)", style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold)), 
+                    if (senKazandin && !game.klasikModMu && !game.gunlukModMu) Text("+${game.hedefYem} Altın (Görev Ödülü)", style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold)), 
+                    if (game.klasikModMu && !game.ikiKisilikMi && !game.gunlukModMu) Text("+${(game.oyuncuSkoru ~/ 20)} Altın (Performans Ödülü)", style: TextStyle(color: Colors.amberAccent, fontSize: 14, fontWeight: FontWeight.bold)), 
                     Text("Güncel Servetin: $toplamAltin Altın", style: TextStyle(color: Colors.amber, fontSize: 16, fontWeight: FontWeight.bold))
                   ]
                 )
@@ -580,7 +673,10 @@ class GameOverMenu extends StatelessWidget {
               SizedBox(height: 20),
               ElevatedButton.icon(
                 icon: Icon(Icons.refresh, color: Colors.black), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10)), 
-                onPressed: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => AnaMenu())), 
+                onPressed: () {
+                  FlameAudio.bgm.stop(); 
+                  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => AnaMenu()));
+                }, 
                 label: Text("ANA MENÜ", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black))
               )
             ],
@@ -598,15 +694,21 @@ class SnakeGame extends FlameGame with KeyboardEvents {
   final int rakipSayisi; 
   final bool klasikModMu; 
   final bool ikiKisilikMi; 
-  final List<String> seciliAksesuarlar; // YENİLİK
+  final bool gunlukModMu; 
+  final List<String> seciliAksesuarlar; 
 
   final ValueNotifier<int> skorNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> skorNotifier2 = ValueNotifier<int>(0); 
+  final ValueNotifier<int> uiTetikleyici = ValueNotifier<int>(0);
+
+  late AudioPool yemSesiHavuzu;
+  late AudioPool altinSesiHavuzu;
+  bool seslerHazir = false;
 
   SnakeGame({
     required this.oyuncuAdi, required this.zorlukSeviyesi, required this.hedefYem, 
     required this.rakipSayisi, required this.klasikModMu, required this.ikiKisilikMi,
-    required this.seciliAksesuarlar
+    required this.gunlukModMu, required this.seciliAksesuarlar
   });
 
   final double hucreBoyutu = 20.0;
@@ -628,22 +730,41 @@ class SnakeGame extends FlameGame with KeyboardEvents {
   int oyuncuSkoru = 0; 
   int oyuncu2Skoru = 0; 
   int aiSkoru = 0; 
-  late TextPaint yaziFircasi;
   List<Vector2> engelKonumlari = []; 
   final Random _rastgele = Random();
+
+  int toplananHareketli = 0;
+  int toplananAltin = 0;
+  int toplananHiz = 0;
+  double yemHareketZamani = 0;
 
   @override
   Future<void> onLoad() async {
     super.onLoad();
     
+    await FlameAudio.audioCache.loadAll(['fon.mp3', 'yem.mp3', 'gum.mp3', 'altin.mp3']);
+    yemSesiHavuzu = await FlameAudio.createPool('yem.mp3', minPlayers: 3, maxPlayers: 10);
+    altinSesiHavuzu = await FlameAudio.createPool('altin.mp3', minPlayers: 2, maxPlayers: 5);
+    seslerHazir = true;
+    
+    FlameAudio.bgm.play('fon.mp3', volume: 0.25);
+    
     dikeyKareSayisi = (size.y / hucreBoyutu).floor();
-    yatayKareSayisi = klasikModMu ? dikeyKareSayisi : (size.x / hucreBoyutu).floor(); 
+    yatayKareSayisi = (klasikModMu || gunlukModMu) ? dikeyKareSayisi : (size.x / hucreBoyutu).floor(); 
 
     for (int x = 0; x < yatayKareSayisi; x++) { engelKonumlari.add(Vector2(x.toDouble(), 0)); engelKonumlari.add(Vector2(x.toDouble(), (dikeyKareSayisi - 1).toDouble())); }
     for (int y = 0; y < dikeyKareSayisi; y++) { engelKonumlari.add(Vector2(0, y.toDouble())); engelKonumlari.add(Vector2((yatayKareSayisi - 1).toDouble(), y.toDouble())); }
 
+    int tasLimiti = 0;
+    if (!klasikModMu && !gunlukModMu && !ikiKisilikMi) {
+      tasLimiti = 20; 
+    } else if (ikiKisilikMi) {
+      tasLimiti = 10; 
+    } else {
+      tasLimiti = 0;  
+    }
+
     int uretilenIcEngel = 0;
-    int tasLimiti = klasikModMu ? 10 : 20; 
     while (uretilenIcEngel < tasLimiti) {
       int x = _rastgele.nextInt(yatayKareSayisi - 2) + 1; int y = _rastgele.nextInt(dikeyKareSayisi - 2) + 1;
       Vector2 yeniTasKonumu = Vector2(x.toDouble(), y.toDouble());
@@ -667,7 +788,7 @@ class SnakeGame extends FlameGame with KeyboardEvents {
       add(oyuncu2!);
     }
 
-    if (!klasikModMu) {
+    if (!klasikModMu && !gunlukModMu && !ikiKisilikMi) {
       for (int i = 0; i < rakipSayisi; i++) {
         var ai = YapayZekaYilani(hucreBoyutu: hucreBoyutu, yatayKare: yatayKareSayisi, dikeyKare: dikeyKareSayisi, zorlukSeviyesi: zorlukSeviyesi);
         double basX = 5; double basY = 5;
@@ -679,13 +800,10 @@ class SnakeGame extends FlameGame with KeyboardEvents {
 
     yem = Yem(hucreBoyutu: hucreBoyutu, yatayKareSayisi: yatayKareSayisi, dikeyKareSayisi: dikeyKareSayisi); add(yem); 
     altinPara = AltinPara(hucreBoyutu: hucreBoyutu, yatayKareSayisi: yatayKareSayisi, dikeyKareSayisi: dikeyKareSayisi); add(altinPara);
-
-    if (!klasikModMu) {
-      hizYemi = HizYemi(hucreBoyutu: hucreBoyutu, yatayKareSayisi: yatayKareSayisi, dikeyKareSayisi: dikeyKareSayisi); add(hizYemi);
-    }
-
+    hizYemi = HizYemi(hucreBoyutu: hucreBoyutu, yatayKareSayisi: yatayKareSayisi, dikeyKareSayisi: dikeyKareSayisi); add(hizYemi);
+    
+    // YENİLİK: Unutulan Taş Çizdirme Kodu eklendi! (Artık Battle Royale'de taşlar görünecek)
     for (var t in engelKonumlari) { add(Tas(hucreBoyutu: hucreBoyutu, baslangicKonumu: t)); }
-    yaziFircasi = TextPaint(style: const TextStyle(fontSize: 14.0, color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Arial'));
   }
 
   @override
@@ -693,15 +811,9 @@ class SnakeGame extends FlameGame with KeyboardEvents {
 
   void yonUygula(Yon yeniYon, int oyuncuNo) {
     if (oyuncuNo == 1) {
-      if (yeniYon == Yon.yukari && oyuncu.mevcutYon != Yon.asagi) oyuncu.mevcutYon = Yon.yukari;
-      else if (yeniYon == Yon.asagi && oyuncu.mevcutYon != Yon.yukari) oyuncu.mevcutYon = Yon.asagi;
-      else if (yeniYon == Yon.sol && oyuncu.mevcutYon != Yon.sag) oyuncu.mevcutYon = Yon.sol;
-      else if (yeniYon == Yon.sag && oyuncu.mevcutYon != Yon.sol) oyuncu.mevcutYon = Yon.sag;
+      oyuncu.yonKuyrugaEkle(yeniYon);
     } else if (oyuncuNo == 2 && ikiKisilikMi && oyuncu2 != null) {
-      if (yeniYon == Yon.yukari && oyuncu2!.mevcutYon != Yon.asagi) oyuncu2!.mevcutYon = Yon.yukari;
-      else if (yeniYon == Yon.asagi && oyuncu2!.mevcutYon != Yon.yukari) oyuncu2!.mevcutYon = Yon.asagi;
-      else if (yeniYon == Yon.sol && oyuncu2!.mevcutYon != Yon.sag) oyuncu2!.mevcutYon = Yon.sol;
-      else if (yeniYon == Yon.sag && oyuncu2!.mevcutYon != Yon.sol) oyuncu2!.mevcutYon = Yon.sag;
+      oyuncu2!.yonKuyrugaEkle(yeniYon);
     }
   }
 
@@ -721,11 +833,51 @@ class SnakeGame extends FlameGame with KeyboardEvents {
     return super.onKeyEvent(event, keysPressed);
   }
 
+  void yemleriKacir(dynamic hedef) {
+    if (hedef.konum == null) return;
+    Vector2 k = hedef.konum!;
+    List<Vector2> kacanAdimlar = [];
+    if (k.x > 1) kacanAdimlar.add(Vector2(k.x - 1, k.y));
+    if (k.x < yatayKareSayisi - 2) kacanAdimlar.add(Vector2(k.x + 1, k.y));
+    if (k.y > 1) kacanAdimlar.add(Vector2(k.x, k.y - 1));
+    if (k.y < dikeyKareSayisi - 2) kacanAdimlar.add(Vector2(k.x, k.y + 1));
+
+    kacanAdimlar.removeWhere((v) => 
+      engelKonumlari.any((e) => e.x == v.x && e.y == v.y) || 
+      oyuncu.govde.any((g) => g.x == v.x && g.y == v.y)
+    );
+
+    if (kacanAdimlar.isNotEmpty) {
+      hedef.konum = kacanAdimlar[_rastgele.nextInt(kacanAdimlar.length)];
+    }
+  }
+
+  void goreviKontrolEt() {
+    if (gunlukModMu && !gGorevTamamlandi) {
+      if (toplananHareketli >= gHedefHareketli && toplananAltin >= gHedefAltin && toplananHiz >= gHedefHiz) {
+        bitisMesaji = "GÖREV BAŞARILI! 30 ALTIN KAZANDIN!";
+        gGorevTamamlandi = true;
+        toplamAltin += 30;
+        veriKaydet();
+        oyunuBitir(oyuncuAdi);
+      }
+    }
+  }
+
   @override
   void update(double dt) {
     if (oyunBitti) return;
     super.update(dt);
     
+    if (gunlukModMu) {
+      yemHareketZamani += dt;
+      if (yemHareketZamani >= 0.6) {
+        yemHareketZamani = 0;
+        yemleriKacir(yem);
+        yemleriKacir(hizYemi); 
+      }
+    }
+
     final kafa1 = oyuncu.govde.first;
 
     bool p2Oldu = false;
@@ -737,6 +889,7 @@ class SnakeGame extends FlameGame with KeyboardEvents {
       p2Oldu = p2Duvar || p2Kendine || p2P1eVurdu;
       
       if (yem.konum != null && kafa2.x == yem.konum!.x && kafa2.y == yem.konum!.y) {
+        if (seslerHazir) yemSesiHavuzu.start(volume: 0.4); 
         oyuncu2!.yemYedi(); yem.konumUret(); oyuncu2Skoru += 10; skorNotifier2.value = oyuncu2Skoru;
         try { oyuncu2!.kaliciHizArtir(); } catch(e) {}
       }
@@ -744,14 +897,42 @@ class SnakeGame extends FlameGame with KeyboardEvents {
 
     bool p1Duvar = kafa1.x < 0 || kafa1.x >= yatayKareSayisi || kafa1.y < 0 || kafa1.y >= dikeyKareSayisi || engelKonumlari.any((t) => t.x == kafa1.x && t.y == kafa1.y);
     bool p1Kendine = oyuncu.govde.skip(1).any((p) => p.x == kafa1.x && p.y == kafa1.y);
-    bool p1RakibeCarpti = !klasikModMu ? yapayZekalar.any((ai) => ai.govde.any((p) => p.x == kafa1.x && p.y == kafa1.y)) : (ikiKisilikMi ? oyuncu2!.govde.any((p) => p.x == kafa1.x && p.y == kafa1.y) : false);
+    bool p1RakibeCarpti = (!klasikModMu && !gunlukModMu) ? yapayZekalar.any((ai) => ai.govde.any((p) => p.x == kafa1.x && p.y == kafa1.y)) : (ikiKisilikMi ? oyuncu2!.govde.any((p) => p.x == kafa1.x && p.y == kafa1.y) : false);
     bool p1Oldu = p1Duvar || p1Kendine || p1RakibeCarpti;
 
-    if (p1Oldu && p2Oldu) { bitisMesaji = "KAFA KAFAYA ÇARPIŞTINIZ!"; oyunuBitir("BERABERE"); return;
-    } else if (p1Oldu) { bitisMesaji = ikiKisilikMi ? "OYUNCU 2 (Kırmızı) KAZANDI!" : "DUVARA VEYA KENDİNE ÇARPTIN!"; oyunuBitir(ikiKisilikMi ? "OYUNCU 2" : "Yapay Zeka"); return;
-    } else if (p2Oldu) { bitisMesaji = "OYUNCU 1 (Yeşil) KAZANDI!"; oyunuBitir("OYUNCU 1"); return; }
+    if (p1Oldu && p2Oldu) { 
+      bitisMesaji = "KAFA KAFAYA ÇARPIŞTINIZ!"; 
+      oyunuBitir("BERABERE"); 
+      return;
+    } else if (p2Oldu) { 
+      bitisMesaji = "OYUNCU 1 (Yeşil) KAZANDI!"; 
+      oyunuBitir("OYUNCU 1"); 
+      return; 
+    } else if (p1Oldu) { 
+      if (ikiKisilikMi) {
+        bitisMesaji = "OYUNCU 2 (Kırmızı) KAZANDI!"; 
+        oyunuBitir("OYUNCU 2");
+      } else if (gunlukModMu) {
+        String sebep = p1Kendine ? "Kendi kuyruğunu yedin!" : "Duvara tosladın!";
+        bitisMesaji = "GÖREV BAŞARISIZ!\n$sebep";
+        oyunuBitir(oyuncuAdi);
+      } else {
+        String isim = oyuncuAdi.isEmpty ? "Şampiyon" : oyuncuAdi;
+        if (p1Duvar) {
+          bitisMesaji = "$isim, kafayı taşa vurdun!";
+        } else if (p1Kendine) {
+          bitisMesaji = "Hey $isim, kendi kuyruğunu mu yiyorsun!";
+        } else if (p1RakibeCarpti) {
+          bitisMesaji = "Dostum o yem değil, rakibin!";
+        } else {
+          bitisMesaji = "ÇARPIŞMA!";
+        }
+        oyunuBitir("Yapay Zeka");
+      }
+      return;
+    }
 
-    if (!klasikModMu) {
+    if (!klasikModMu && !gunlukModMu && !ikiKisilikMi) {
       List<YapayZekaYilani> olenYilanlar = [];
       for (var ai in yapayZekalar) {
         final aiKafa = ai.govde.first;
@@ -770,8 +951,10 @@ class SnakeGame extends FlameGame with KeyboardEvents {
           olenYilanlar.add(ai);
         } else {
           if (yem.konum != null && aiKafa.x == yem.konum!.x && aiKafa.y == yem.konum!.y) { 
+            if (seslerHazir) yemSesiHavuzu.start(volume: 0.3); 
             ai.yemYedi(); yem.konumUret(); 
             bireyselAiSkorlari[ai] = (bireyselAiSkorlari[ai] ?? 0) + 10;
+            uiTetikleyici.value++; 
             if (bireyselAiSkorlari[ai]! >= hedefYem * 10) { bitisMesaji = "Çok yavaşsın çaylak!"; oyunuBitir("Yapay Zeka"); return; } 
           }
           if (hizYemi.konum != null && aiKafa.x == hizYemi.konum!.x && aiKafa.y == hizYemi.konum!.y) { ai.hizKazan(); hizYemi.konumUret(); }
@@ -779,29 +962,44 @@ class SnakeGame extends FlameGame with KeyboardEvents {
         }
       }
 
-      for (var olen in olenYilanlar) { olen.oluMu = true; remove(olen); yapayZekalar.remove(olen); bireyselAiSkorlari.remove(olen); }
+      for (var olen in olenYilanlar) { olen.oluMu = true; remove(olen); yapayZekalar.remove(olen); bireyselAiSkorlari.remove(olen); uiTetikleyici.value++; } 
       if (bireyselAiSkorlari.isNotEmpty) { aiSkoru = bireyselAiSkorlari.values.reduce(max); } else { aiSkoru = 0; }
       if (yapayZekalar.isEmpty) { bitisMesaji = "BÜTÜN RAKİPLER ELENDİ, MEYDAN SENİN!"; oyunuBitir(oyuncuAdi); return; }
     }
 
     if (yem.konum != null && kafa1.x == yem.konum!.x && kafa1.y == yem.konum!.y) { 
+      if (seslerHazir) yemSesiHavuzu.start(volume: 0.4); 
       oyuncu.yemYedi(); yem.konumUret(); oyuncuSkoru += 10; skorNotifier.value = oyuncuSkoru; 
+      
+      if (gunlukModMu) { toplananHareketli++; goreviKontrolEt(); uiTetikleyici.value++; }
 
       if (klasikModMu) {
         if (!ikiKisilikMi && oyuncuSkoru > klasikRekor) { klasikRekor = oyuncuSkoru; }
         try { oyuncu.kaliciHizArtir(); } catch (e) {}
-      } else if (oyuncuSkoru >= hedefYem * 10) { bitisMesaji = "HEDEF YEME ULAŞTIN, ZAFER SENİN!"; oyunuBitir(oyuncuAdi); }
+      } else if (!gunlukModMu && oyuncuSkoru >= hedefYem * 10) { bitisMesaji = "HEDEF YEME ULAŞTIN, ZAFER SENİN!"; oyunuBitir(oyuncuAdi); }
     }
     
-    if (!klasikModMu && hizYemi.konum != null && kafa1.x == hizYemi.konum!.x && kafa1.y == hizYemi.konum!.y) { oyuncu.hizKazan(); hizYemi.konumUret(); }
-    if (altinPara.konum != null && kafa1.x == altinPara.konum!.x && kafa1.y == altinPara.konum!.y) { toplamAltin += 1; veriKaydet(); altinPara.konumUret(); }
+    if (hizYemi.konum != null && kafa1.x == hizYemi.konum!.x && kafa1.y == hizYemi.konum!.y) { 
+      oyuncu.hizKazan(); hizYemi.konumUret(); 
+      if (gunlukModMu) { toplananHiz++; goreviKontrolEt(); uiTetikleyici.value++; }
+    }
+    
+    if (altinPara.konum != null && kafa1.x == altinPara.konum!.x && kafa1.y == altinPara.konum!.y) { 
+      if (seslerHazir) altinSesiHavuzu.start(volume: 0.8); 
+      toplamAltin += 1; veriKaydet(); altinPara.konumUret(); 
+      if (gunlukModMu) { toplananAltin++; goreviKontrolEt(); uiTetikleyici.value++; }
+    }
   }
 
   void oyunuBitir(String kimKazandi) {
     if (oyunBitti) return; 
+    
+    FlameAudio.bgm.stop(); 
+    FlameAudio.play('gum.mp3'); 
+
     oyunBitti = true; 
     kazanan = kimKazandi;
-    if (!klasikModMu && kazanan == oyuncuAdi && oyuncuAdi != "") {
+    if (!klasikModMu && !gunlukModMu && kazanan == oyuncuAdi && oyuncuAdi != "") {
       toplamAltin += hedefYem;
     } else if (klasikModMu && !ikiKisilikMi) {
       toplamAltin += (oyuncuSkoru ~/ 20); 
@@ -811,17 +1009,6 @@ class SnakeGame extends FlameGame with KeyboardEvents {
     if (overlays.add('GameOver')) {}
   }
 
-  void skorTabelasiCiz(Canvas canvas, String yazi, double x, double y, Color cerceveRengi, int hizalama) {
-    double kutuGenisligi = (yazi.length * 8.5) + 20.0; 
-    double cizimX = x;
-    if (hizalama == 2) cizimX = x - (kutuGenisligi / 2); 
-    if (hizalama == 3) cizimX = x - kutuGenisligi;       
-    final dikdortgen = RRect.fromRectAndRadius(Rect.fromLTWH(cizimX, y, kutuGenisligi, 30.0), const Radius.circular(10));
-    canvas.drawRRect(dikdortgen, Paint()..color = Colors.black.withOpacity(0.6));
-    canvas.drawRRect(dikdortgen, Paint()..color = cerceveRengi..style = PaintingStyle.stroke..strokeWidth = 2);
-    yaziFircasi.render(canvas, yazi, Vector2(cizimX + 10, y + 6));
-  }
-
   @override
   void render(Canvas canvas) {
     super.render(canvas);
@@ -829,11 +1016,5 @@ class SnakeGame extends FlameGame with KeyboardEvents {
     
     for (double x = 0; x <= yatayKareSayisi * hucreBoyutu; x += hucreBoyutu) canvas.drawLine(Offset(x, 0), Offset(x, dikeyKareSayisi * hucreBoyutu), paint);
     for (double y = 0; y <= dikeyKareSayisi * hucreBoyutu; y += hucreBoyutu) canvas.drawLine(Offset(0, y), Offset(yatayKareSayisi * hucreBoyutu, y), paint);
-    
-    if (!klasikModMu) {
-      skorTabelasiCiz(canvas, "$oyuncuAdi: $oyuncuSkoru / ${hedefYem * 10}", 15, 15, Colors.greenAccent, 1);
-      skorTabelasiCiz(canvas, "Kalan Rakip: ${yapayZekalar.length}", size.x / 2, 15, Colors.amberAccent, 2);
-      skorTabelasiCiz(canvas, "Lider AI: $aiSkoru / ${hedefYem * 10}", size.x - 15, 15, Colors.redAccent, 3);
-    }
   }
 }

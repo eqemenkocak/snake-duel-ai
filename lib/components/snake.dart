@@ -13,6 +13,8 @@ class OyuncuYilani extends Component with HasGameRef<FlameGame> {
   List<Vector2> govde = [];
   Yon mevcutYon = Yon.sag;
   
+  List<Yon> hareketKuyrugu = [];
+  
   double zamanSayaci = 0;
   double normalHareketAraligi = 0.1; 
   double hareketAraligi = 0.1; 
@@ -49,9 +51,9 @@ class OyuncuYilani extends Component with HasGameRef<FlameGame> {
   }
 
   void kaliciHizArtir() {
-    normalHareketAraligi = normalHareketAraligi * 0.93; 
-    if (normalHareketAraligi < 0.04) {
-      normalHareketAraligi = 0.04;
+    normalHareketAraligi = normalHareketAraligi * 0.98; 
+    if (normalHareketAraligi < 0.05) {
+      normalHareketAraligi = 0.05;
     }
     if (!hizliMi) {
       hareketAraligi = normalHareketAraligi;
@@ -62,6 +64,21 @@ class OyuncuYilani extends Component with HasGameRef<FlameGame> {
     hizliMi = true;
     hizSuresi = 3.0; 
     hareketAraligi = normalHareketAraligi / 2; 
+  }
+
+  void yonKuyrugaEkle(Yon yeniYon) {
+    Yon sonPlanlananYon = hareketKuyrugu.isNotEmpty ? hareketKuyrugu.last : mevcutYon;
+    
+    if (yeniYon == Yon.yukari && sonPlanlananYon == Yon.asagi) return;
+    if (yeniYon == Yon.asagi && sonPlanlananYon == Yon.yukari) return;
+    if (yeniYon == Yon.sol && sonPlanlananYon == Yon.sag) return;
+    if (yeniYon == Yon.sag && sonPlanlananYon == Yon.sol) return;
+    
+    if (yeniYon == sonPlanlananYon) return;
+    
+    if (hareketKuyrugu.length < 2) { 
+      hareketKuyrugu.add(yeniYon);
+    }
   }
 
   @override
@@ -84,6 +101,10 @@ class OyuncuYilani extends Component with HasGameRef<FlameGame> {
   }
 
   void hareketUygula() {
+    if (hareketKuyrugu.isNotEmpty) {
+      mevcutYon = hareketKuyrugu.removeAt(0);
+    }
+    
     Vector2 yeniKafa = govde.first.clone();
 
     switch (mevcutYon) {
@@ -142,18 +163,14 @@ class OyuncuYilani extends Component with HasGameRef<FlameGame> {
       canvas.translate(merkezX, merkezY); 
       canvas.rotate(aci); 
       
-      // YENİLİK: ÇİZİM SIRASI (Z-INDEX) GÜNCELLENDİ
-      // Önce Ağız ve Burun çizilir (En altta kalırlar)
       List<String> siralama = ["Komik Ağız", "Koca Burun"];
       
-      // Sonra Gözlükler çizilir (Burunun üstüne biner)
       for (String aks in seciliAksesuarlar) {
         if (aks.contains("Gözlük")) {
           siralama.add(aks);
         }
       }
       
-      // EN SON KRAL TACI ÇİZİLİR (Her şeyin en önünde/üstünde durur!)
       if (seciliAksesuarlar.contains("Kral Tacı")) {
         siralama.add("Kral Tacı");
       }
@@ -169,13 +186,13 @@ class OyuncuYilani extends Component with HasGameRef<FlameGame> {
 
         if (aks == "Kral Tacı") {
           aksesuarGenislik = hucreBoyutu * 1.0; 
-          offsetY = -hucreBoyutu * 0.6; // En Önde
+          offsetY = -hucreBoyutu * 0.5; 
         } else if (aks == "Komik Ağız") {
           aksesuarGenislik = hucreBoyutu * 0.7; 
-          offsetY = hucreBoyutu * 0.5; // En altta
+          offsetY = hucreBoyutu * 0.5; 
         } else if (aks == "Koca Burun") {
           aksesuarGenislik = hucreBoyutu * 0.5; 
-          offsetY = 0.0; // Tam merkezde
+          offsetY = 0.0; 
         } else if (aks.contains("Gözlük")) {
           aksesuarGenislik = hucreBoyutu * 1.1; 
           offsetY = -hucreBoyutu * 0.15; 

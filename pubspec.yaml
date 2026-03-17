@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   flame: ^1.18.0
+  flame_audio: ^2.1.1 # YENİLİK: Ses motoru paketi!
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.4
 
@@ -23,9 +24,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # YENİLİK: Oyunun resimleri (Tekerlek, Taç, Gözlük vs.) görebilmesi için izin!
   assets:
     - assets/images/
+    - assets/audio/ # YENİLİK: Ses klasörüne izin verdik!
 
 # İkon oluşturma paketi için konfigürasyon
 flutter_launcher_icons:
